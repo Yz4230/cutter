@@ -1,4 +1,3 @@
-import bs4
 import requests
 import json
 import re
@@ -42,7 +41,8 @@ class ChatScraper:
         self.video_id = self.parse(video_id)
         self.logger = getLogger(f"{ChatScraper.__name__}({self.video_id})")
         with YoutubeDL() as ydl:
-            self.video_details: dict = ydl.extract_info(self.video_id, download=False)
+            self.video_details: dict = ydl.extract_info(
+                self.video_id, download=False)
 
     @staticmethod
     def parse(url: str) -> Optional[str]:
@@ -58,22 +58,6 @@ class ChatScraper:
         res = sess.post(api_url, cls.YT_CHAT_API_DATA, headers=cls.ACCESS_HEADERS.update(
             {"content-type": "application/json"}))
         return res.json()
-
-    # def __process_message_data(self, data: dict) -> Optional[dict]:
-    #     try: 
-    #         result = {}
-    #         action: dict = data["actions"][0]["addChatItemAction"]["item"]["liveChatTextMessageRenderer"]
-    #         runs: List[dict] = action["message"]
-    #         message = ""
-    #         for run in runs:
-    #             message += run.get("text", "")
-    #         result["message"] = message
-    #         result["authorName"] = action["authorName"]["simpleText"]
-    #         result["timestampUsec"] = int(action["timestampUsec"])
-    #         result["offsetMsec"] = int(data["videoOffsetTimeMsec"])
-    #         return data
-    #     except:
-    #         return None
 
     # チャットデータ処理
     def __handle_message_data(self, args: Tuple[int, List[Dict], Deque]) -> None:
@@ -97,14 +81,13 @@ class ChatScraper:
 
             html = session.get(self.YT_URL_BASE.format(
                 video_id=self.video_id), headers=self.ACCESS_HEADERS)
-            soup = bs4.BeautifulSoup(html.text, "html.parser")
 
             # データの取得に使うAPIキー
             api_key = re.search(
-                r'"INNERTUBE_API_KEY":"(.*?)"', soup.text).group(1)
+                r'"INNERTUBE_API_KEY":"(.*?)"',html.text).group(1)
             # 取得するための最初のトークン
             first_chat_continuation = re.search(
-                r'"continuation":"([a-zA-Z0-9]+)"', soup.text).group(1)
+                r'"continuation":"([a-zA-Z0-9]+)"', html.text).group(1)
             # 取得した最初のチャットデータ
             fetched_data = self.__fetch_chat_api(
                 session, first_chat_continuation, api_key)
@@ -116,17 +99,19 @@ class ChatScraper:
             while(True):
                 try:
                     continuation_data = fetched_data["continuationContents"]["liveChatContinuation"]
-                    next_continuation = continuation_data["continuations"][0]["liveChatReplayContinuationData"]["continuation"].rstrip("%3D")
+                    next_continuation = continuation_data["continuations"][0]["liveChatReplayContinuationData"]["continuation"].rstrip(
+                        "%3D")
                     actions = continuation_data["actions"]
 
                     executor.submit(self.__handle_message_data,
                                     (access_count, actions, chat_data))
                     if self.show_progress:
-                        last_chat_time = int(actions[-1]["replayChatItemAction"]["videoOffsetTimeMsec"]) // 1000
+                        last_chat_time = int(
+                            actions[-1]["replayChatItemAction"]["videoOffsetTimeMsec"]) // 1000
                         ratio = last_chat_time / video_duration
                         progress_bar = int(ratio * 32)
                         print(f"\r[{'*' * progress_bar}{'_' * (32 - progress_bar)}] {ratio * 100:.2f}% "
-                            f"last comment time: {timedelta(seconds=last_chat_time)}", end="")
+                              f"last comment time: {timedelta(seconds=last_chat_time)}", end="")
 
                     fetched_data = self.__fetch_chat_api(
                         session, next_continuation, api_key)
@@ -139,7 +124,7 @@ class ChatScraper:
         chat_data = list(chat_data)
         chat_data = sum(map(lambda i: list(i[1]), sorted(
             chat_data, key=lambda i: i[0])), [])
-        self.chat_data = list(chat_data)
+        self.chat_data = chat_data
         self.logger.info(
             f"Finished scraping in {time.time() - start_time:.1f} seconds.")
 
@@ -148,7 +133,8 @@ class ChatScraper:
     def save(self, dist: Optional[str] = None) -> str:
         self.logger.info("Saving chat data...")
         start_time = time.time()
-        escaped_title = re.sub(r"\\|\/|<|>|\||:|&", "", self.video_details["title"])
+        escaped_title = re.sub(r"\\|\/|<|>|\||:|&", "",
+                               self.video_details["title"])
         _filename = dist or f"chats--{self.video_id}--{escaped_title}.json"
         with open(_filename, mode="w", encoding="utf-8") as wf:
             json.dump(self.chat_data, wf, ensure_ascii=False, indent=2)

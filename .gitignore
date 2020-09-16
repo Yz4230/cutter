@@ -1,5 +1,6 @@
 *.json
 *.mp4
+*.txt
 
 .vscode
 __pycache__
