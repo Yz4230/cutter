@@ -4,21 +4,24 @@ from Types import Clip
 from typing import Union, List
 from datetime import timedelta
 
+
 class HotExplorer:
     YT_URL_BASE = "http://www.youtube.com/watch?v={video_id}&t={time}s"
 
     def __init__(self, data: Union[str, list], mean_range=10, clip_range=20, max_clips=20):
-        self.__data:Union[str, list] = data
+        self.__data: Union[str, list] = data
         self.__mean_range: int = mean_range
         self.__clip_range: int = clip_range
         self.__max_clips: int = max_clips
-        self.hot_clips: List[Clip] = []
+        self.__hot_clips: list[Clip] = []
 
     @staticmethod
     def __is_text_chat(chat: dict) -> bool:
         try:
-            chat["actions"][0]["addChatItemAction"]["item"]["liveChatTextMessageRenderer"]
-            return True
+            timestamp: str = \
+                chat["actions"][0]["addChatItemAction"]["item"]["liveChatTextMessageRenderer"]["timestampText"][
+                    "simpleText"]
+            return "," not in timestamp
         except KeyError:
             return False
 
@@ -54,10 +57,11 @@ class HotExplorer:
         chat_data = map(self.__make_data, chat_data)
         chat_data = list(filter(lambda i: i["time"] >= 0, chat_data))
 
-        hist, bins = np.histogram(list(map(lambda i: i["time"], chat_data)), bins=np.arange(0, chat_data[-1]["time"] + 1))
+        hist, bins = np.histogram(list(map(lambda i: i["time"], chat_data)),
+                                  bins=np.arange(0, chat_data[-1]["time"] + 1))
 
         mean_range = self.__mean_range
-        convolved =np.convolve(hist, np.ones(mean_range) / mean_range, mode="same")
+        convolved = np.convolve(hist, np.ones(mean_range) / mean_range, mode="same")
 
         max_clips = self.__max_clips
         hot_points = convolved.argsort()[:-(max_clips + 1):-1]
@@ -70,19 +74,16 @@ class HotExplorer:
             for index, clip in enumerate(clips):
                 start, end = clip
                 if start <= point <= end:
-                    clips[index] = [min(start, point-clip_range), max(end, point+clip_range)]
+                    clips[index] = [min(start, point - clip_range), max(end, point + clip_range)]
                     break
             else:
-                clips.append([point-clip_range, point+clip_range])
+                clips.append([point - clip_range, point + clip_range])
         for index, clip in enumerate(clips):
             clips[index] = [int(max(min_time, clip[0])), int(min(max_time, clip[1]))]
 
-        self.__hot_clips = [Clip(clip[0], clip[1]) for clip in clips]
+        self.__hot_clips += [Clip(clip[0], clip[1]) for clip in clips]
 
         return self.__hot_clips
 
-    def clips_as_string(self) -> List[List[str]]:
-        return [list(map(self.__sec_to_str, clip)) for clip in self.__hot_clips]
-
-    def generate_links(self, video_id:str) -> List[str]:
+    def generate_links(self, video_id: str) -> List[str]:
         return [self.YT_URL_BASE.format(video_id=video_id, time=clip.start) for clip in self.__hot_clips]

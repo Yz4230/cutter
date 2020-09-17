@@ -28,11 +28,10 @@ def wrap_make_clip_video(args):
     return make_clip_video(*args)
 
 
-with ProcessPoolExecutor(max_workers=6) as excecutor:
-    excecutor.map(
+with ProcessPoolExecutor(max_workers=2) as executor:
+    executor.map(
         wrap_make_clip_video,
-        [(clip, video_id, os.path.join(
-            dist, f"{clip.start}-{clip.end}.mp4")) for clip in clips]
+        [(clip, video_id, os.path.join(dist, f"{clip.start}-{clip.end}.mp4"), True) for clip in clips]
     )
 
 clipvideo_filenames = [f"{clip.start}-{clip.end}.mp4" for clip in clips]
